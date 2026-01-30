@@ -664,7 +664,7 @@ const TenderAuditPerson: React.FC = () => {
                 <div className={`flex flex-1 gap-[20px] min-h-0 ${isSmallRes ? 'flex-col' : 'flex-row'}`}>
                   {/* 比对视图 */}
                   <div className="flex-[6] flex flex-col border border-slate-100 rounded-xl bg-slate-50 overflow-hidden">
-                    <div className="grid grid-cols-3 h-[36px] bg-slate-100/80 border-b shrink-0 text-[12px] font-bold text-slate-500 text-center items-center">
+                    <div className="grid grid-cols-2 h-[36px] bg-slate-100/80 border-b shrink-0 text-[12px] font-bold text-slate-500 text-center items-center">
                       <div>投标文件 (选取)</div><div className="text-blue-600">中标合同 (上传)</div>
                     </div>
                     <div className="flex-1 overflow-y-auto custom-scrollbar p-[15px] bg-white">
