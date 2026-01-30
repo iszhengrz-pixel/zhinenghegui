@@ -1,439 +1,605 @@
-import React, { useState, useMemo } from 'react';
+
+import React, { useState, useRef, useEffect } from 'react';
 import { 
-  Upload, FileText, Network, Files, X, 
-  AlertCircle, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Maximize2,
-  Info, ShieldAlert, Download, Share2, Filter, RefreshCcw, FileOutput,
-  Fingerprint, DollarSign, Cpu, FileCheck, Users, Link2
+  RotateCw, HelpCircle, Upload, FileText, Trash2, X, AlertCircle, 
+  ChevronLeft, ChevronRight, Filter, Network, ZoomIn, ZoomOut, 
+  Maximize2, Building2, Loader2, CheckCircle2, Download, Info,
+  PanelLeftClose, PanelLeftOpen, FileWarning, Search, User
 } from 'lucide-react';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
-  ResponsiveContainer, Cell 
-} from 'recharts';
 
-interface SimilarityData {
-  name: string;
-  score: number;
-  attributes: {
-    pricing: string;
-    techStack: string;
-    format: string;
-    metadata: string;
-  };
-  collusionFeatures: { label: string; severity: 'high' | 'medium' }[];
-  content: { text: string; isHighlighted: boolean }[];
-  pairInfo: string;
-}
-
-interface GraphNode {
+interface UploadedFile {
   id: string;
-  label: string;
-  type: 'company' | 'person';
-  x: number;
-  y: number;
-  riskCount: number;
+  name: string;
+  size: string;
+  raw: File;
 }
 
-interface GraphLink {
-  source: string;
-  target: string;
-  value: number;
-  relationType: string;
+interface FeatureCard {
+  id: string;
+  title: string;
+  result: string;
 }
 
-const MOCK_SIMILARITY_DATA: SimilarityData[] = [
-  { 
-    name: '投标单位A.pdf', 
-    score: 88, 
-    attributes: {
-      pricing: "单价分析表与主标书完全一致",
-      techStack: "微服务架构(React+SpringBoot)",
-      format: "页边距2.5cm，标题三号黑体",
-      metadata: "作者：Admin, 创建工具：Office 365"
-    },
-    collusionFeatures: [
-      { label: "高度内容雷同", severity: 'high' },
-      { label: "报价规律吻合", severity: 'high' },
-      { label: "文档属性重合", severity: 'medium' }
-    ],
-    content: [
-      { text: "本项目的系统架构设计，严格遵循《国家网络安全等级保护基本要求》等标准。", isHighlighted: false },
-      { text: "本项目拟采用三层架构设计，前端使用 React 框架，后端采用 Spring Boot 开发，数据库使用 MySQL。在部署方面，建议使用 Docker 容器化方案以提高交付效率。", isHighlighted: true },
-      { text: "系统将提供全方位的风险预警功能，支持自定义预警阈值与多种通知方式。", isHighlighted: false }
-    ], 
-    pairInfo: "文件A - 主标书 雷同率 88%" 
-  },
-  { 
-    name: '投标单位B.docx', 
-    score: 42, 
-    attributes: {
-      pricing: "报价结构存在差异",
-      techStack: "传统单体架构",
-      format: "页边距2.0cm，标题小二宋体",
-      metadata: "作者：User-B, 创建工具：WPS Office"
-    },
-    collusionFeatures: [
-      { label: "特定表述重合", severity: 'medium' }
-    ],
-    content: [
-      { text: "我们建议在现有网络基础上增加负载均衡设备，以应对高并发访问压力。", isHighlighted: false },
-      { text: "技术方案中关于数据加密的描述若与系统整体安全性要求不符合，需在响应文件中进行二次技术澄清。", isHighlighted: true },
-      { text: "项目进度计划分为三个阶段。", isHighlighted: false }
-    ], 
-    pairInfo: "文件B - 主标书 雷同率 42%" 
-  },
-  { 
-    name: '投标单位C.pdf', 
-    score: 95, 
-    attributes: {
-      pricing: "报价取整习惯与单位A完全一致",
-      techStack: "微服务架构(React+SpringBoot)",
-      format: "页边距2.5cm，标题三号黑体",
-      metadata: "作者：Admin, 创建工具：Office 365"
-    },
-    collusionFeatures: [
-      { label: "串标嫌疑极高", severity: 'high' },
-      { label: "报价结构镜像", severity: 'high' },
-      { label: "格式特征码一致", severity: 'high' }
-    ],
-    content: [
-      { text: "本项目拟采用三层架构设计，前端使用 React 框架，后端采用 Spring Boot 开发，数据库使用 MySQL。在部署方面，建议使用 Docker 容器化方案以提高交付效率。", isHighlighted: true },
-      { text: "财务报表审计报告必须加盖会计师事务所公章。如果出现关键财务指标信息缺失或不完整情况，评审小组将有权判定该标书无效。", isHighlighted: true },
-      { text: "严格遵守招投标法。", isHighlighted: false }
-    ], 
-    pairInfo: "文件C - 投标单位A 雷同率 95%" 
-  },
-  { 
-    name: '投标单位D.doc', 
-    score: 15, 
-    attributes: {
-      pricing: "独特报价模型",
-      techStack: "低代码平台方案",
-      format: "自定义格式",
-      metadata: "作者：IT-Dept, 创建工具：Word 2016"
-    },
-    collusionFeatures: [],
-    content: [{ text: "初步判断差异度较大，无显著雷同片段。", isHighlighted: false }], 
-    pairInfo: "文件D - 主标书 雷同率 15%" 
-  },
-  { 
-    name: '投标单位E.pdf', 
-    score: 64, 
-    attributes: {
-      pricing: "存在常规报价重合",
-      techStack: "微服务方案(部分参考)",
-      format: "标准政府格式",
-      metadata: "作者：XiaoWang, 创建工具：Office 365"
-    },
-    collusionFeatures: [
-      { label: "标准条款雷同", severity: 'medium' }
-    ],
-    content: [{ text: "部分标准条款描述存在重合。", isHighlighted: true }], 
-    pairInfo: "文件E - 主标书 雷同率 64%" 
-  }
-];
+interface SimilarityPair {
+  id: string;
+  files: string;
+  score: number;
+  level: 'high' | 'medium' | 'low';
+}
 
-const MOCK_GRAPH: { nodes: GraphNode[]; links: GraphLink[] } = {
-  nodes: [
-    { id: '1', label: '中建建设集团', type: 'company', x: 200, y: 150, riskCount: 0 },
-    { id: '2', label: '宏达贸易', type: 'company', x: 450, y: 100, riskCount: 2 },
-    { id: '3', label: '腾飞科技', type: 'company', x: 100, y: 300, riskCount: 0 },
-    { id: '4', label: '李建国', type: 'person', x: 350, y: 350, riskCount: 1 },
-    { id: '5', label: '王大壮', type: 'person', x: 550, y: 250, riskCount: 0 }
-  ],
-  links: [
-    { source: '1', target: '2', value: 85, relationType: '共同历史股东' },
-    { source: '1', target: '4', value: 95, relationType: '现任法人' },
-    { source: '2', target: '4', value: 82, relationType: '前任核心高管' },
-    { source: '3', target: '1', value: 20, relationType: '一般上下游' },
-    { source: '5', target: '2', value: 70, relationType: '直系亲属持股' }
-  ]
-};
+interface RiskItem {
+  id: string;
+  index: number;
+  pair: string;
+  type: string;
+  detail: string;
+  level: 'high' | 'medium';
+  suggestion: string;
+}
 
 const TenderComparison: React.FC = () => {
-  const [comparisonFiles, setComparisonFiles] = useState<File[]>([]);
-  const [selectedSimIdx, setSelectedSimIdx] = useState<number>(0);
-  const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
+  // 基础状态
+  const [files, setFiles] = useState<UploadedFile[]>([]);
+  const [isComparing, setIsComparing] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isResultLoaded, setIsResultLoaded] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  
+  // 交互状态
+  const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(null);
+  const [selectedPairId, setSelectedPairId] = useState<string | null>(null);
+  const [isFlashing, setIsFlashing] = useState(false);
+  const [isRiskFlashing, setIsRiskFlashing] = useState(false);
   const [graphScale, setGraphScale] = useState(1);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [similarityFilter, setSimilarityFilter] = useState('all');
+  const [dimensionFilter, setDimensionFilter] = useState('全部维度');
+  const [notification, setNotification] = useState<{ type: 'success' | 'info' | 'error', message: string } | null>(null);
 
-  const filteredData = useMemo(() => {
-    if (similarityFilter === 'all') return MOCK_SIMILARITY_DATA;
-    const threshold = parseInt(similarityFilter);
-    return MOCK_SIMILARITY_DATA.filter(d => d.score >= threshold);
-  }, [similarityFilter]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const maxSimilarity = useMemo(() => Math.max(...MOCK_SIMILARITY_DATA.map(d => d.score)), []);
-  const selectedData = filteredData[selectedSimIdx] || filteredData[0] || MOCK_SIMILARITY_DATA[0];
+  // 响应式监听
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth <= 1366) {
+        setIsSidebarCollapsed(true);
+      } else {
+        setIsSidebarCollapsed(false);
+      }
+    };
+    handleResize(); // 初始执行
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
-  const handleBarClick = (data: any) => {
-    if (data && typeof data.activeTooltipIndex === 'number') {
-      setSelectedSimIdx(data.activeTooltipIndex);
-      setCurrentPage(1);
+  // 数据预设
+  const featureCards: FeatureCard[] = [
+    { id: 'price', title: '报价结构', result: '已采集：报价项、单价、总价、优惠比例。系统自动提取了所有子项目的单价构成，并与历史同类项目均价进行了偏差率计算。' },
+    { id: 'tech', title: '技术方案表述', result: '已采集：系统架构、安全等级、实施周期、运维承诺。深度分析了技术方案中的核心组件及其版本号。' },
+    { id: 'format', title: '格式细节', result: '已采集：字体字号、页眉页脚、落款印章、附件完整度。识别出 3 处文档元数据中的隐藏作者信息重合。' },
+    { id: 'business', title: '商务条款表述', result: '已采集：质保期、付款方式、违约责任、履约保证。识别出在“不可抗力”条款描述中存在高度一致性。' }
+  ];
+
+  const similarityPairs: SimilarityPair[] = [
+    { id: 'pair-1', files: '投标文件_A.pdf - 投标文件_C.pdf', score: 92, level: 'high' },
+    { id: 'pair-2', files: '投标文件_B.docx - 投标文件_A.pdf', score: 82, level: 'medium' },
+    { id: 'pair-3', files: '投标文件_C.pdf - 投标文件_D.pdf', score: 71, level: 'low' },
+    { id: 'pair-4', files: '投标文件_D.pdf - 投标文件_B.docx', score: 45, level: 'low' },
+  ];
+
+  const riskList: RiskItem[] = [
+    { id: 'risk-1', index: 1, pair: '中标建设(A) - 宏达贸易(B)', type: '股权关联', detail: '中标建设持有宏达贸易 60% 股权，且两家公司在同一地址办公。', level: 'high', suggestion: '建议核查是否存在串标行为' },
+    { id: 'risk-2', index: 2, pair: '腾飞科技(C) - 中标建设(A)', type: '人员关联', detail: '两家公司共用同一名财务负责人(李某)，且法定代表人为堂兄弟关系。', level: 'medium', suggestion: '建议核查人员任职合规性' },
+    { id: 'risk-3', index: 3, pair: '宏达贸易(B) - 腾飞科技(C)', type: '投标联系人', detail: '两份电子标书上传的 IP 地址及电脑 MAC 地址完全一致。', level: 'high', suggestion: '极高串标嫌疑，建议移交纪检调查' }
+  ];
+
+  // 辅助函数
+  const showMessage = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 3000);
+  };
+
+  const processFiles = (newFiles: File[]) => {
+    const updatedFiles = [...files];
+    const allowedExtensions = ['pdf', 'doc', 'docx'];
+    let errorOccurred = false;
+
+    newFiles.forEach(f => {
+      const ext = f.name.split('.').pop()?.toLowerCase();
+      if (!ext || !allowedExtensions.includes(ext)) {
+        showMessage("仅支持 PDF/Word 格式文件，请重新上传", "error");
+        errorOccurred = true;
+        return;
+      }
+      if (f.size > 50 * 1024 * 1024) {
+        showMessage("单文件大小不得超过 50MB，请重新上传", "error");
+        errorOccurred = true;
+        return;
+      }
+      if (updatedFiles.length >= 10) {
+        showMessage("最多支持 10 份文件比对，请删除多余文件", "error");
+        errorOccurred = true;
+        return;
+      }
+      updatedFiles.push({
+        id: Math.random().toString(36).substr(2, 9),
+        name: f.name,
+        size: (f.size / (1024 * 1024)).toFixed(2) + 'MB',
+        raw: f
+      });
+    });
+
+    if (!errorOccurred) {
+      setFiles(updatedFiles);
     }
   };
 
-  return (
-    <div className="flex flex-col h-full bg-[#F9FAFB] overflow-y-auto custom-scrollbar relative">
-      <style>{`
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #E5E7EB; border-radius: 10px; }
-        @keyframes dash { to { stroke-dashoffset: 0; } }
-        .animate-dash { stroke-dasharray: 5; animation: dash 10s linear infinite; }
-      `}</style>
+  const handleStartCompare = () => {
+    if (files.length < 2) return;
+    setIsComparing(true);
+    setIsResultLoaded(false);
+    setTimeout(() => {
+      setIsComparing(false);
+      setIsResultLoaded(true);
+      setSelectedPairId('pair-1');
+      showMessage("比对分析完成，检测到 3 处高风险项", "success");
+    }, 5000);
+  };
 
-      {/* Header */}
-      <div className="h-14 bg-white border-b border-slate-200 px-6 flex items-center justify-between shrink-0 sticky top-0 z-20 shadow-sm">
-        <div className="flex items-center gap-4">
-          <h2 className="text-sm font-bold text-slate-800">标书审查-投标文件比对 (串标分析中心)</h2>
-          <div className="h-6 w-px bg-slate-100"></div>
-          <div className="flex bg-slate-100 p-1 rounded-lg">
-             <div className="px-4 py-1.5 text-xs font-bold rounded bg-white text-blue-600 shadow-sm">AI 穿透视图</div>
-          </div>
+  const handleReset = () => {
+    setIsRefreshing(true);
+    setTimeout(() => {
+      setFiles([]);
+      setIsResultLoaded(false);
+      setIsComparing(false);
+      setIsRefreshing(false);
+      setSelectedFeatureId(null);
+      setSelectedPairId(null);
+      setDimensionFilter('全部维度');
+      showMessage("系统已重置，您可以重新上传文件", "info");
+    }, 800);
+  };
+
+  const handleRefresh = () => {
+    if (isResultLoaded) {
+      setIsRefreshing(true);
+      setTimeout(() => setIsRefreshing(false), 800);
+    } else {
+      window.location.reload();
+    }
+  };
+
+  // 骨架屏组件
+  const SectionSkeleton = ({ title }: { title: string }) => (
+    <div className="animate-pulse h-full flex flex-col gap-4">
+      <div className="h-6 w-1/4 bg-gray-200 rounded shrink-0"></div>
+      <div className="bg-gray-100/50 rounded-xl border border-gray-100 flex flex-col p-8 gap-4">
+        <div className="h-4 w-3/4 bg-gray-200 rounded"></div>
+        <div className="h-4 w-1/2 bg-gray-200 rounded"></div>
+        <div className="h-40 bg-gray-50 rounded-lg flex items-center justify-center">
+          <Loader2 className="w-8 h-8 text-gray-200 animate-spin" />
         </div>
-        <div className="flex items-center gap-2">
-           <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold border border-blue-100 uppercase tracking-wider">内容与特征深度识别引擎已就绪</span>
-        </div>
-      </div>
-
-      <div className="p-5 space-y-6 pb-28">
-        {/* 1. 采集与特征分析区 */}
-        <div className="bg-white border border-[#E5E7EB] rounded-2xl p-6 shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-              <Fingerprint className="w-5 h-5 text-blue-600" /> Bidding Document Fingerprint & Content Feature Extraction
-            </h3>
-            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">已采集属性: 报价、方案、格式、元数据</span>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl">
-              <div className="flex items-center gap-2 mb-2 text-blue-600">
-                <DollarSign className="w-4 h-4" />
-                <span className="text-xs font-bold">报价结构特征</span>
-              </div>
-              <p className="text-[11px] text-slate-600 font-medium leading-relaxed">{selectedData.attributes.pricing}</p>
-            </div>
-            <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl">
-              <div className="flex items-center gap-2 mb-2 text-indigo-600">
-                <Cpu className="w-4 h-4" />
-                <span className="text-xs font-bold">技术方案表述</span>
-              </div>
-              <p className="text-[11px] text-slate-600 font-medium leading-relaxed">{selectedData.attributes.techStack}</p>
-            </div>
-            <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl">
-              <div className="flex items-center gap-2 mb-2 text-emerald-600">
-                <FileCheck className="w-4 h-4" />
-                <span className="text-xs font-bold">文档格式细节</span>
-              </div>
-              <p className="text-[11px] text-slate-600 font-medium leading-relaxed">{selectedData.attributes.format}</p>
-            </div>
-            <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl">
-              <div className="flex items-center gap-2 mb-2 text-purple-600">
-                <Link2 className="w-4 h-4" />
-                <span className="text-xs font-bold">元数据溯源</span>
-              </div>
-              <p className="text-[11px] text-slate-600 font-medium leading-relaxed">{selectedData.attributes.metadata}</p>
-            </div>
-          </div>
-
-          <div className="h-[200px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={filteredData} onClick={handleBarClick}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94A3B8', fontWeight: 'bold'}} />
-                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94A3B8'}} />
-                <Tooltip 
-                  cursor={{fill: '#F8FAFC'}} 
-                  contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}}
-                />
-                <Bar dataKey="score" radius={[6, 6, 0, 0]} barSize={44}>
-                  {filteredData.map((entry, index) => (
-                    <Cell 
-                      key={`cell-${index}`} 
-                      fill={index === selectedSimIdx ? '#1E40AF' : (entry.score >= 80 ? '#EF4444' : '#E2E8F0')} 
-                      className="cursor-pointer transition-all hover:opacity-80" 
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* 2. 串标风险识别 */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 bg-white border border-[#E5E7EB] rounded-2xl flex flex-col shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/40">
-              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-red-500" /> 特征相似度对比 - 串标典型特征标记
-              </h3>
-              <div className="flex items-center gap-3">
-                <button onClick={() => setCurrentPage(p => Math.max(1, p-1))} className="p-1.5 bg-white rounded-lg border border-slate-200 text-slate-400 hover:text-blue-600 transition-all"><ChevronLeft className="w-4 h-4" /></button>
-                <span className="text-[11px] font-bold text-slate-600 bg-white px-4 py-1.5 rounded-lg border border-slate-200 shadow-sm">{currentPage} / 3</span>
-                <button onClick={() => setCurrentPage(p => Math.min(3, p+1))} className="p-1.5 bg-white rounded-lg border border-slate-200 text-slate-400 hover:text-blue-600 transition-all"><ChevronRight className="w-4 h-4" /></button>
-              </div>
-            </div>
-            <div className="p-8 space-y-6 bg-white min-h-[400px]">
-              {selectedData.content.map((item, idx) => (
-                <div key={idx} className={`text-[14px] leading-relaxed p-5 rounded-2xl transition-all ${item.isHighlighted ? 'bg-red-50 text-slate-800 border-l-4 border-[#DC2626] shadow-sm' : 'text-slate-500'}`}>
-                  {item.isHighlighted && <span className="text-[10px] font-black bg-[#DC2626] text-white px-2 py-0.5 rounded-full mr-2 mb-2 inline-block shadow-sm">串标特征匹配</span>}
-                  <p className={item.isHighlighted ? 'font-medium' : ''}>{item.text}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-          
-          <div className="bg-white border border-[#E5E7EB] rounded-2xl p-6 flex flex-col shadow-sm">
-            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center justify-between">
-              串标风险因子 (Typical Indicators)
-              <ShieldAlert className="w-4 h-4 text-red-500" />
-            </h3>
-            <div className="space-y-4">
-              {selectedData.collusionFeatures.map((f, i) => (
-                <div key={i} className={`p-4 rounded-xl border flex items-center justify-between shadow-sm ${f.severity === 'high' ? 'bg-red-50 border-red-100 text-red-700' : 'bg-orange-50 border-orange-100 text-orange-700'}`}>
-                  <span className="text-xs font-black">{f.label}</span>
-                  <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-tighter ${f.severity === 'high' ? 'bg-red-200 text-red-800' : 'bg-orange-200 text-orange-800'}`}>
-                    {f.severity === 'high' ? '极高风险' : '中度嫌疑'}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* 3. 企业信息库联动 */}
-        <div className="bg-white border border-[#E5E7EB] rounded-2xl p-8 shadow-sm relative overflow-hidden flex flex-col min-h-[600px]">
-          <div className="flex items-center justify-between mb-8 shrink-0 relative z-10">
-            <div className="space-y-1">
-              <h3 className="text-[18px] font-bold text-slate-800 flex items-center gap-2">
-                <Network className="w-6 h-6 text-blue-600" /> 投标主体关联关系穿透 - 联动企业信息库分析
-              </h3>
-              <p className="text-sm text-slate-400 font-medium">穿透结果：标记潜在股权、高管、历史关联风险，辅助判定违规串标行为</p>
-            </div>
-            <div className="flex items-center gap-3 bg-white/90 backdrop-blur p-1.5 rounded-2xl border border-slate-200 shadow-sm">
-              <button onClick={() => setGraphScale(s => Math.max(0.3, s - 0.1))} className="p-2.5 hover:bg-slate-50 rounded-xl text-slate-500 transition-all"><ZoomOut className="w-5 h-5" /></button>
-              <div className="w-14 text-center text-[11px] font-black text-slate-400">{Math.round(graphScale * 100)}%</div>
-              <button onClick={() => setGraphScale(s => Math.min(2, s + 0.1))} className="p-2.5 hover:bg-slate-50 rounded-xl text-slate-500 transition-all"><ZoomIn className="w-5 h-5" /></button>
-              <div className="w-px h-5 bg-slate-200 mx-1"></div>
-              <button onClick={() => setGraphScale(1)} className="p-2.5 hover:bg-slate-50 rounded-xl text-slate-500 transition-all"><Maximize2 className="w-5 h-5" /></button>
-            </div>
-          </div>
-
-          <div className="flex-1 bg-slate-50/40 rounded-3xl relative overflow-hidden border border-slate-100 shadow-inner group">
-            <svg 
-              width="100%" 
-              height="100%" 
-              viewBox="0 0 700 450" 
-              className="transition-transform duration-500 origin-center cursor-grab active:cursor-grabbing"
-              style={{ transform: `scale(${graphScale})` }}
-            >
-              <defs>
-                <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="28" refY="3.5" orient="auto">
-                  <polygon points="0 0, 10 3.5, 0 7" fill="#CBD5E1" />
-                </marker>
-              </defs>
-              
-              {MOCK_GRAPH.links.map((link, i) => {
-                const s = MOCK_GRAPH.nodes.find(n => n.id === link.source)!;
-                const t = MOCK_GRAPH.nodes.find(n => n.id === link.target)!;
-                const isHighRisk = link.value >= 80;
-                return (
-                  <g key={i}>
-                    <line 
-                      x1={s.x} y1={s.y} x2={t.x} y2={t.y} 
-                      stroke={isHighRisk ? '#EF4444' : '#CBD5E1'} 
-                      strokeWidth={link.value / 12} 
-                      strokeDasharray={isHighRisk ? 'none' : '8,4'}
-                      markerEnd="url(#arrowhead)"
-                      className={isHighRisk ? '' : 'animate-dash'}
-                    />
-                    <rect 
-                      x={(s.x + t.x) / 2 - 35} 
-                      y={(s.y + t.y) / 2 - 10} 
-                      width="70" height="20" 
-                      rx="6" fill="white" stroke={isHighRisk ? '#EF4444' : '#E2E8F0'} 
-                    />
-                    <text 
-                      x={(s.x + t.x) / 2} 
-                      y={(s.y + t.y) / 2} 
-                      fill={isHighRisk ? '#EF4444' : '#94A3B8'} 
-                      fontSize="9" fontWeight="black" textAnchor="middle" dy=".3em"
-                    >
-                      {link.relationType}
-                    </text>
-                  </g>
-                );
-              })}
-
-              {MOCK_GRAPH.nodes.map(node => (
-                <g 
-                  key={node.id} 
-                  className="cursor-pointer group/node" 
-                  onClick={(e) => { e.stopPropagation(); setSelectedNode(node); }}
-                >
-                  <circle 
-                    cx={node.x} cy={node.y} r="30" 
-                    fill="white" 
-                    stroke={node.type === 'company' ? '#1E40AF' : '#F97316'} 
-                    strokeWidth="4" 
-                    className="transition-all duration-300 group-hover/node:stroke-[6px]"
-                  />
-                  {node.riskCount > 0 && <circle cx={node.x + 22} cy={node.y - 22} r="10" fill="#EF4444" />}
-                  {node.riskCount > 0 && <text x={node.x + 22} y={node.y - 22} textAnchor="middle" dy=".3em" fill="white" fontSize="10" fontWeight="black">{node.riskCount}</text>}
-                  <text x={node.x} y={node.y} textAnchor="middle" dy=".3em" fontSize="14" fontWeight="black" fill={node.type === 'company' ? '#1E40AF' : '#F97316'}>{node.type === 'company' ? '企' : '人'}</text>
-                  <text x={node.x} y={node.y + 48} textAnchor="middle" fontSize="12" fontWeight="black" fill="#1E293B">{node.label}</text>
-                </g>
-              ))}
-            </svg>
-
-            {selectedNode && (
-              <div className="absolute right-8 top-8 w-72 bg-white rounded-3xl shadow-2xl border border-slate-100 p-6 z-30">
-                <div className="flex items-center justify-between mb-5">
-                  <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${selectedNode.type === 'company' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
-                    {selectedNode.type === 'company' ? 'Company Entity' : 'Natural Person'}
-                  </span>
-                  <button onClick={() => setSelectedNode(null)} className="p-1.5 hover:bg-slate-100 rounded-full text-slate-400 transition-colors"><X className="w-5 h-5" /></button>
-                </div>
-                <h4 className="text-[17px] font-black text-slate-900 mb-4 truncate" title={selectedNode.label}>{selectedNode.label}</h4>
-                <div className="space-y-4 mb-6">
-                  <div className="flex items-center justify-between text-[12px]"><span className="text-slate-400 font-bold tracking-tight uppercase">穿透风险标记</span><span className={`font-black ${selectedNode.riskCount > 0 ? 'text-red-500' : 'text-emerald-500'}`}>{selectedNode.riskCount > 0 ? `${selectedNode.riskCount} 项关联异常` : '合规正常'}</span></div>
-                  <div className="flex items-center justify-between text-[12px]"><span className="text-slate-400 font-bold tracking-tight uppercase">资信评级</span><span className="font-black text-slate-800">稳健 (A)</span></div>
-                </div>
-                <button className="w-full py-2.5 bg-blue-600 text-white rounded-xl text-[11px] font-black hover:bg-blue-700">同步联动库数据</button>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* 底部控制栏 - 适配 280px 侧边栏 */}
-      <div className="fixed bottom-0 right-0 left-0 bg-white/80 backdrop-blur-md border-t border-slate-200 p-5 flex items-center justify-center gap-[15px] shadow-[0_-8px_30px_rgb(0,0,0,0.04)] z-50 transition-all duration-300 ml-0 group-has-[aside:not(.w-20)]:ml-[280px] group-has-[aside.w-20]:ml-20">
-        <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-xl border border-slate-200 w-[200px] shadow-sm">
-          <Filter className="w-4 h-4 text-slate-400" />
-          <select 
-            value={similarityFilter}
-            onChange={(e) => setSimilarityFilter(e.target.value)}
-            className="bg-transparent text-xs font-bold text-slate-600 outline-none w-full cursor-pointer appearance-none"
-          >
-            <option value="all">相似度筛选：全部</option>
-            <option value="80">相似度 ≥ 80%</option>
-            <option value="60">相似度 ≥ 60%</option>
-            <option value="40">相似度 ≥ 40%</option>
-          </select>
-        </div>
-        
-        <button className="h-[44px] px-8 py-2 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-slate-200 transition-all border border-slate-200 active:scale-95">
-          <RefreshCcw className="w-4 h-4" />
-          重新比对
-        </button>
-        
-        <button className="h-[44px] px-12 py-2 bg-[#1E40AF] text-white rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-[#1e3a8a] transition-all shadow-xl shadow-blue-100 active:scale-95">
-          <FileOutput className="w-4 h-4" />
-          导出比对报告
-        </button>
       </div>
     </div>
   );
+
+  return (
+    <div className="flex flex-col h-full w-full bg-[#F9FAFB] text-[14px] overflow-hidden font-sans relative">
+      
+      {/* 全局消息提示 */}
+      {notification && (
+        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-md shadow-2xl border flex items-center gap-3 animate-in slide-in-from-top-4 duration-300
+          ${notification.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 
+            notification.type === 'error' ? 'bg-red-50 border-red-100 text-red-700' : 
+            'bg-blue-50 border-blue-100 text-blue-700'}
+        `}>
+          {notification.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : 
+           notification.type === 'error' ? <AlertCircle className="w-5 h-5" /> : <Info className="w-5 h-5" />}
+          <span className="font-bold">{notification.message}</span>
+        </div>
+      )}
+
+      {/* 顶部操作通栏 */}
+      <header className="h-[64px] w-full bg-white border-b border-[#E5E7EB] px-[20px] shrink-0 flex items-center justify-between z-40 shadow-sm">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4">
+            <h2 className="text-[16px] font-black text-[#1F2937] tracking-tight">标书智能识别</h2>
+            <div className="h-6 w-px bg-slate-200 mx-1"></div>
+            {/* 分段切换按钮 */}
+            <div className="flex bg-slate-100 p-1 rounded-lg">
+              <button 
+                className="px-5 py-1.5 text-xs font-bold rounded transition-all text-slate-400 hover:text-slate-600"
+              >
+                标书瑕疵识别
+              </button>
+              <button 
+                className="px-5 py-1.5 text-xs font-bold rounded shadow-sm transition-all bg-white text-blue-600"
+              >
+                投标文件比对
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-[12px]">
+          <button 
+            onClick={handleStartCompare}
+            disabled={files.length < 2 || isComparing || isRefreshing} 
+            className={`h-[38px] px-6 rounded-lg font-bold flex items-center justify-center transition-all shadow-sm
+              ${files.length >= 2 && !isComparing && !isRefreshing ? 'bg-[#1E40AF] text-white hover:bg-blue-700 active:scale-95 hover:shadow-blue-200 hover:shadow-lg' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}
+            `}
+          >
+            {isComparing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <PlayIcon className="w-4 h-4 mr-2" />}
+            {isComparing ? '正在分析' : '开始比对'}
+          </button>
+          <button 
+            onClick={handleReset}
+            disabled={!isResultLoaded || isComparing || isRefreshing} 
+            className={`h-[38px] px-5 rounded-lg bg-white border border-[#1E40AF] text-[#1E40AF] font-bold transition-all
+              ${isResultLoaded && !isComparing && !isRefreshing ? 'hover:bg-blue-50 hover:shadow-md' : 'opacity-40 cursor-not-allowed'}
+            `}
+          >
+            重新比对
+          </button>
+          <button 
+            onClick={() => showMessage("分析报告导出成功，正在下载 PDF 文件...")}
+            disabled={!isResultLoaded || isComparing || isRefreshing} 
+            className={`h-[38px] px-5 rounded-lg bg-white border border-[#1E40AF] text-[#1E40AF] font-bold transition-all
+              ${isResultLoaded && !isComparing && !isRefreshing ? 'hover:bg-blue-50 hover:shadow-md' : 'opacity-40 cursor-not-allowed'}
+            `}
+          >
+            <Download className="w-4 h-4 mr-2 inline-block" />导出分析报告
+          </button>
+          
+          <div className="ml-2 flex items-center gap-2 text-[10px] bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-full font-bold border border-emerald-100">
+             AI 已就绪
+          </div>
+        </div>
+      </header>
+
+      {/* 处理进度条 */}
+      {isComparing && (
+        <div className="h-[40px] w-full bg-[#1E40AF] text-white flex items-center justify-center gap-3 animate-in slide-in-from-top duration-300 relative z-30">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          <span className="text-[12px] font-black tracking-[0.05em]">AI 正在深度处理全文，请稍候（预计 5-15 秒，视文件数量而定）...</span>
+          <div className="absolute bottom-0 left-0 h-1 bg-white/20 w-full">
+            <div className="h-full bg-white animate-progress-bar"></div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-1 w-full overflow-hidden">
+        {/* 左侧文件管理 */}
+        <aside className={`bg-white border-r border-[#E5E7EB] flex flex-col shrink-0 transition-all duration-300 relative ${isSidebarCollapsed ? 'w-[64px]' : 'w-[300px]'}`}>
+          <div className="p-4 border-b border-gray-50 flex items-center justify-between">
+            {!isSidebarCollapsed && <h3 className="text-[15px] font-black text-[#1F2937]">投标文件管理</h3>}
+            <button 
+              onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+              className={`p-1.5 rounded-md hover:bg-gray-100 text-gray-400 transition-colors ${isSidebarCollapsed ? 'mx-auto' : ''}`}
+            >
+              {isSidebarCollapsed ? <PanelLeftOpen className="w-5 h-5" /> : <PanelLeftClose className="w-5 h-5" />}
+            </button>
+          </div>
+
+          <div className="p-4 flex-1 flex flex-col gap-4 overflow-hidden">
+            <div className="shrink-0">
+              <input type="file" multiple ref={fileInputRef} onChange={(e) => processFiles(Array.from(e.target.files || []))} className="hidden" accept=".pdf,.doc,.docx" />
+              <button 
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isComparing || isRefreshing}
+                className={`w-full h-[40px] rounded-lg font-bold flex items-center justify-center gap-2 shadow-sm transition-all
+                  ${isComparing || isRefreshing ? 'bg-gray-50 text-gray-300' : 'bg-[#1E40AF] hover:bg-blue-700 text-white hover:shadow-blue-200'}
+                  ${isSidebarCollapsed ? 'px-0' : 'px-4'}
+                `}
+              >
+                <Upload className="w-5 h-5 shrink-0" />
+                {!isSidebarCollapsed && <span className="truncate">上传文件</span>}
+              </button>
+            </div>
+
+            <div className={`text-[11px] text-gray-400 font-bold uppercase tracking-wider ${isSidebarCollapsed ? 'text-center' : ''}`}>
+              {isSidebarCollapsed ? files.length : `已导入 ${files.length} / 10`}
+            </div>
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar -mx-2 px-2 space-y-2">
+              {files.map((file) => (
+                <div key={file.id} className="group flex items-center justify-between p-2.5 rounded-lg hover:bg-gray-50 border border-transparent hover:border-gray-100 transition-all">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <FileText className={`w-5 h-5 shrink-0 transition-colors ${selectedPairId ? 'text-blue-500' : 'text-gray-300'}`} />
+                    {!isSidebarCollapsed && (
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-[13px] text-gray-700 truncate font-bold">{file.name}</span>
+                        <span className="text-[11px] text-gray-400">{file.size}</span>
+                      </div>
+                    )}
+                  </div>
+                  {!isSidebarCollapsed && !isComparing && !isResultLoaded && (
+                    <button 
+                      onClick={() => setFiles(prev => prev.filter(f => f.id !== file.id))} 
+                      className="p-1.5 rounded-md text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
+              {files.length === 0 && !isSidebarCollapsed && (
+                <div className="h-40 border-2 border-dashed border-gray-100 rounded-2xl flex flex-col items-center justify-center text-gray-300 gap-3">
+                  <div className="p-3 bg-gray-50 rounded-full"><Upload className="w-6 h-6 opacity-40" /></div>
+                  <span className="text-xs font-bold">待上传比对文件</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </aside>
+
+        {/* 右侧主区域 - 统一间距 p-5 space-y-5 */}
+        <main className="flex-1 bg-[#F9FAFB] overflow-y-auto custom-scrollbar p-5 space-y-5">
+          
+          {/* 第一栏：特征卡片 */}
+          <section className="bg-white border border-[#E5E7EB] p-4 lg:p-6 rounded-3xl shadow-sm h-auto shrink-0">
+            {isComparing || isRefreshing ? <SectionSkeleton title="AI 特征采集结果" /> : (
+              <>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-[18px] font-black text-[#1F2937]">AI 特征采集结果</h3>
+                  <HelpCircle className="w-4 h-4 text-gray-300" />
+                </div>
+                {isResultLoaded ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                    {featureCards.map((card) => (
+                      <div 
+                        key={card.id} 
+                        onClick={() => { setSelectedFeatureId(card.id); setDimensionFilter(card.title); setIsFlashing(true); setTimeout(() => setIsFlashing(false), 1200); }} 
+                        className={`p-5 rounded-2xl cursor-pointer transition-all border flex flex-col gap-3 group min-h-[140px]
+                          ${selectedFeatureId === card.id ? 'bg-[#E0E7FF] border-[#E5E7EB] shadow-md' : 'bg-[#F9FAFB] border-transparent hover:bg-white hover:border-blue-100 hover:shadow-lg'}
+                        `}
+                      >
+                        <div className="text-[15px] font-black text-[#1F2937] group-hover:text-blue-700 transition-colors">{card.title}</div>
+                        <div className="text-[13px] text-[#4B5563] leading-relaxed">{card.result}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="py-16 flex flex-col items-center justify-center text-gray-300 italic gap-3 bg-gray-50/30 rounded-2xl border border-dashed border-gray-100">
+                    <Search className="w-12 h-12 opacity-10" />
+                    <p className="font-bold">导入至少2份文件并点击“开始比对”开启特征分析</p>
+                  </div>
+                )}
+              </>
+            )}
+          </section>
+
+          {/* 第二栏：相似度分析 */}
+          <section className="bg-white border border-[#E5E7EB] p-4 lg:p-6 rounded-3xl shadow-sm h-auto flex flex-col">
+            {isComparing || isRefreshing ? <SectionSkeleton title="跨文件相似度比对结果" /> : (
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-4 mb-5">
+                  <h3 className="text-[18px] font-black text-[#1F2937]">跨文件相似度比对结果</h3>
+                  <div className="text-[20px] font-black text-[#DC2626] flex items-center gap-3">
+                    <span className="text-[13px] text-gray-400 font-bold uppercase tracking-widest">全局峰值相似度:</span>
+                    <span className={`bg-red-50 px-4 py-1.5 rounded-xl border border-red-100 transition-all shadow-sm ${isResultLoaded ? 'opacity-100 scale-100' : 'opacity-20 scale-95'}`}>{isResultLoaded ? '92%' : '--%'}</span>
+                  </div>
+                </div>
+
+                {isResultLoaded ? (
+                  <div className="space-y-6">
+                    <div className="flex flex-wrap items-center gap-4">
+                      <div className="relative group flex-1 max-w-[280px]">
+                        <select 
+                          value={dimensionFilter} 
+                          onChange={(e) => setDimensionFilter(e.target.value)}
+                          className="w-full h-[40px] pl-4 pr-10 border border-[#E5E7EB] rounded-xl bg-white text-gray-700 font-bold appearance-none outline-none focus:ring-4 focus:ring-blue-500/5 focus:border-blue-400 transition-all cursor-pointer"
+                        >
+                          <option>全部维度</option>
+                          {featureCards.map(c => <option key={c.id}>{c.title}</option>)}
+                        </select>
+                        <Filter className="w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-blue-500 transition-colors pointer-events-none" />
+                      </div>
+                      <div className="relative group flex-1 max-w-[240px]">
+                        <select className="w-full h-[40px] pl-4 pr-10 border border-[#E5E7EB] rounded-xl bg-white text-gray-700 font-bold appearance-none outline-none focus:ring-4 focus:ring-blue-500/5 focus:border-blue-400 transition-all cursor-pointer">
+                          <option>全部风险等级</option>
+                          <option className="text-red-600 font-black">≥90%（高风险）</option>
+                          <option>≥80%</option>
+                          <option>≥70%</option>
+                        </select>
+                        <ChevronDownIcon className="w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-blue-500 transition-colors pointer-events-none" />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col lg:flex-row gap-8 items-start">
+                      {/* 原文展示区 */}
+                      <div className="flex-[65] w-full border border-[#E5E7EB] rounded-2xl flex flex-col bg-white shadow-sm overflow-hidden">
+                        <div className="p-10 text-[#4B5563] leading-[2.5] text-[15px] bg-slate-50/30">
+                          <div className="space-y-8">
+                            <p className="text-justify indent-8">
+                              本项目的系统架构设计，严格遵循《国家网络安全等级保护基本要求》、《政务信息系统建设管理办法》等标准。在技术选型上，拟采用成熟稳定的三层架构设计，
+                              <span className={`transition-all duration-300 rounded px-1.5 py-0.5 mx-0.5 ${isFlashing ? 'animate-red-flash' : 'text-[#DC2626] font-black bg-red-50/50'}`}>
+                                前端使用 React v18 框架进行组件化开发，后端采用 Spring Boot 微服务治理框架，数据库使用 MySQL 8.0 进行数据持久化。在部署方面，建议使用 Docker 容器化方案
+                              </span>
+                              以提高交付效率。该方案已经在集团多个同类项目中得到成功验证。
+                            </p>
+                            <p className="text-justify indent-8">
+                              财务报表审计报告必须加盖会计师事务所公章及注册会计师私章。如果出现关键财务指标信息缺失或不完整情况，评审小组将有权根据《采购管理办法》判定该标书无效。
+                              <span className="text-[#F97316] font-black underline decoration-orange-300 underline-offset-4">分包商的管理必须严格遵守中华人民共和国招标投标法，严禁任何形式的变相转包或非法分包行为</span>，一经查实将取消其参选资格并列入供应商黑名单。
+                            </p>
+                            <p className="text-justify indent-8">
+                              关于售后服务保障，我方承诺提供 7*24 小时的响应服务。在质放期内，若系统出现一级故障（即业务完全不可用），我方技术人员将在 1 小时内响应，2 小时内到达现场（或开启远程协助），并在 4 小时内修复故障。
+                            </p>
+                          </div>
+                        </div>
+                        <div className="h-[54px] border-t border-[#E5E7EB] flex items-center justify-center gap-6 bg-white shrink-0">
+                          <button className="p-2 text-gray-400 hover:bg-slate-50 rounded-lg transition-all"><ChevronLeft className="w-6 h-6" /></button>
+                          <span className="text-[13px] text-gray-500 font-black tracking-widest">第 01 / 05 页</span>
+                          <button className="p-2 text-blue-600 hover:bg-slate-50 rounded-lg transition-all"><ChevronRight className="w-6 h-6" /></button>
+                        </div>
+                      </div>
+
+                      {/* 配对列表 */}
+                      <div className="flex-[35] w-full border border-[#E5E7EB] rounded-2xl bg-white shadow-sm overflow-hidden sticky top-8">
+                        <div className="p-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                          <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest">相似对照组</span>
+                          <span className="text-[11px] font-bold text-slate-500">数量: {similarityPairs.length}</span>
+                        </div>
+                        <div className="divide-y divide-gray-50">
+                          {similarityPairs.map((pair) => (
+                            <div 
+                              key={pair.id} 
+                              onClick={() => { setSelectedPairId(pair.id); setIsFlashing(true); setTimeout(() => setIsFlashing(false), 1200); }} 
+                              className={`p-5 flex items-center justify-between cursor-pointer transition-all hover:pl-8
+                                ${selectedPairId === pair.id ? 'bg-blue-50/80 border-l-[6px] border-blue-600' : 'hover:bg-slate-50'}
+                              `}
+                            >
+                              <div className="flex flex-col min-w-0 pr-4">
+                                <span className="text-[13px] text-gray-800 truncate font-bold">{pair.files}</span>
+                                <span className="text-[10px] text-gray-400 mt-1 uppercase tracking-tight font-medium">自动比对结果</span>
+                              </div>
+                              <div className="flex items-center gap-4 shrink-0">
+                                <span className={`text-[16px] font-black ${pair.level === 'high' ? 'text-[#DC2626]' : 'text-[#F97316]'}`}>{pair.score}%</span>
+                                {pair.level === 'high' && <span className="px-2 py-0.5 bg-red-100 text-[#DC2626] text-[10px] rounded-lg font-black border border-red-200 shadow-sm">风险</span>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="py-24 flex flex-col items-center justify-center text-gray-300 gap-5 bg-gray-50/30 rounded-2xl border border-dashed border-gray-100">
+                    <FileWarning className="w-16 h-16 opacity-10" />
+                    <p className="font-bold">暂无有效比对数据，请先上传并分析</p>
+                  </div>
+                )}
+              </>
+            )}
+          </section>
+
+          {/* 第三栏：关系图谱 */}
+          <section className="bg-white border border-[#E5E7EB] p-4 lg:p-6 rounded-3xl shadow-sm h-auto flex flex-col">
+            {isComparing || isRefreshing ? <SectionSkeleton title="企业关联关系分析" /> : (
+              <>
+                <h3 className="text-[18px] font-black text-[#1F2937] mb-5 shrink-0">企业关联关系分析</h3>
+                {isResultLoaded ? (
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between flex-wrap gap-4">
+                      <select className="w-[280px] h-[40px] pl-4 pr-10 border border-[#E5E7EB] rounded-xl bg-white text-gray-700 font-bold outline-none focus:ring-4 focus:ring-blue-500/5 transition-all cursor-pointer">
+                        <option>全部投标主体</option>
+                        <option>中标建设集团 (A)</option>
+                        <option>宏达贸易有限公司 (B)</option>
+                        <option>腾飞科技有限公司 (C)</option>
+                      </select>
+                      <div className="flex items-center gap-4 text-xs font-bold text-slate-400">
+                         <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-blue-600"></span> 企业主体</span>
+                         <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-orange-500"></span> 自然人</span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col lg:flex-row gap-8 items-start">
+                      {/* 图谱展示区 */}
+                      <div className="flex-[60] w-full min-h-[500px] border border-[#E5E7EB] rounded-2xl relative bg-slate-50 overflow-hidden shadow-inner group/graph">
+                        <div className="absolute top-4 right-4 z-10 flex flex-col gap-2 bg-white/90 backdrop-blur-md p-2 rounded-2xl border border-slate-200 shadow-2xl opacity-0 group-hover/graph:opacity-100 transition-opacity">
+                          <button onClick={() => setGraphScale(s => Math.min(2, s + 0.1))} className="p-2 hover:bg-white rounded-xl transition-colors border border-transparent hover:border-blue-100"><ZoomIn className="w-5 h-5 text-gray-600" /></button>
+                          <button onClick={() => setGraphScale(s => Math.max(0.5, s - 0.1))} className="p-2 hover:bg-white rounded-xl transition-colors border border-transparent hover:border-blue-100"><ZoomOut className="w-5 h-5 text-gray-600" /></button>
+                          <button onClick={() => setGraphScale(1)} className="p-2 hover:bg-white rounded-xl transition-colors border border-transparent hover:border-blue-100"><Maximize2 className="w-5 h-5 text-gray-600" /></button>
+                        </div>
+                        <div className="w-full h-full flex items-center justify-center transition-transform duration-500" style={{ transform: `scale(${graphScale})` }}>
+                          <svg width="100%" height="100%" viewBox="0 0 500 400" className="cursor-grab active:cursor-grabbing">
+                            <defs>
+                              <marker id="arrow-red-main" markerWidth="10" markerHeight="10" refX="25" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#DC2626" /></marker>
+                              <linearGradient id="lineGrad" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stopColor="#DC2626" /><stop offset="100%" stopColor="#EF4444" /></linearGradient>
+                            </defs>
+                            <path d="M100 150 L400 150" stroke="url(#lineGrad)" strokeWidth="4" markerEnd="url(#arrow-red-main)" className="cursor-pointer hover:stroke-[6px] transition-all" onClick={() => { setIsRiskFlashing(true); setTimeout(() => setIsRiskFlashing(false), 1200); }} />
+                            <text x="250" y="130" textAnchor="middle" fontSize="12" fill="#DC2626" fontWeight="900" className="drop-shadow-sm">股权穿透关联 (95% 风险)</text>
+                            
+                            <path d="M400 150 L250 300" stroke="#F97316" strokeWidth="2" strokeDasharray="6,4" className="cursor-pointer" />
+                            <text x="340" y="240" textAnchor="middle" fontSize="11" fill="#F97316" fontWeight="800" transform="rotate(35, 340, 240)">人员交叉重合</text>
+                            
+                            <g transform="translate(100, 150)" className="hover:scale-110 transition-transform"><circle r="32" fill="white" stroke="#1E40AF" strokeWidth="4" className="shadow-lg" /><Building2 className="w-8 h-8 text-blue-600" x="-16" y="-16" /><text y="54" textAnchor="middle" fontSize="11" fill="#1F2937" fontWeight="900">投标人 A</text></g>
+                            <g transform="translate(400, 150)" className="hover:scale-110 transition-transform"><circle r="32" fill="white" stroke="#1E40AF" strokeWidth="4" className="shadow-lg" /><Building2 className="w-8 h-8 text-blue-600" x="-16" y="-16" /><text y="54" textAnchor="middle" fontSize="11" fill="#1F2937" fontWeight="900">投标人 B</text></g>
+                            <g transform="translate(250, 300)" className="hover:scale-110 transition-transform"><circle r="28" fill="white" stroke="#F97316" strokeWidth="4" className="shadow-lg" /><User className="w-6 h-6 text-orange-600" x="-12" y="-12" /><text y="48" textAnchor="middle" fontSize="11" fill="#1F2937" fontWeight="900">共同负责人</text></g>
+                          </svg>
+                        </div>
+                      </div>
+
+                      {/* 风险清单 */}
+                      <div className="flex-[40] w-full border border-[#E5E7EB] rounded-2xl bg-white shadow-sm overflow-hidden h-auto">
+                        <div className="p-5 bg-slate-50 border-b border-slate-100">
+                          <h4 className="text-[12px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                             <FileWarning className="w-4 h-4 text-red-500" /> 检测到的风险列表
+                          </h4>
+                        </div>
+                        <div className="divide-y divide-gray-100">
+                          {riskList.map((risk) => (
+                            <div key={risk.id} className={`p-6 transition-all border-l-[6px] border-transparent hover:bg-slate-50 ${(risk.id === 'risk-1' && isRiskFlashing) ? 'animate-risk-flash' : ''} ${risk.level === 'high' ? 'border-l-red-500 bg-red-50/20' : 'bg-white'}`}>
+                              <div className="flex items-start justify-between mb-3">
+                                <span className="text-[15px] font-black text-gray-900 leading-tight">{risk.pair}</span>
+                                <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${risk.level === 'high' ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-orange-100 text-orange-700 border border-orange-200'}`}>
+                                  {risk.level === 'high' ? '高危风险' : '中级警告'}
+                                </span>
+                              </div>
+                              <div className="flex flex-col gap-2">
+                                <div className="flex items-center gap-2 text-[12px] font-bold text-slate-700">
+                                   <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span> 风险类型：{risk.type}
+                                </div>
+                                <div className="text-[13px] text-slate-600 leading-relaxed font-medium pl-3.5 border-l-2 border-slate-100">{risk.detail}</div>
+                                <div className="mt-2 text-[12px] font-black text-red-800 bg-white/80 p-3 rounded-xl border border-red-100/50 shadow-sm flex items-start gap-2">
+                                   <Info className="w-4 h-4 mt-0.5 shrink-0" />
+                                   <span>处置建议：{risk.suggestion}</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="py-24 flex flex-col items-center justify-center text-gray-300 gap-5 bg-gray-50/30 rounded-2xl border border-dashed border-slate-100">
+                    <Network className="w-16 h-16 opacity-10" />
+                    <p className="font-bold">企业图谱关联信息待生成</p>
+                  </div>
+                )}
+              </>
+            )}
+          </section>
+
+          {/* 页面底部留白 */}
+          <div className="h-20"></div>
+        </main>
+      </div>
+
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #E5E7EB; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #CBD5E1; }
+        
+        @keyframes redFlash {
+          0%, 100% { background-color: transparent; }
+          50% { background-color: rgba(220, 38, 38, 0.15); }
+        }
+        @keyframes riskFlash {
+          0%, 100% { background-color: rgba(220, 38, 38, 0.05); transform: scale(1); }
+          50% { background-color: rgba(220, 38, 38, 0.2); transform: scale(1.01); }
+        }
+        @keyframes progressBar {
+          0% { width: 0%; }
+          50% { width: 85%; }
+          100% { width: 100%; }
+        }
+        .animate-red-flash { animation: redFlash 0.5s ease-in-out 3; }
+        .animate-risk-flash { animation: riskFlash 0.5s ease-in-out 3; z-index: 20; position: relative; }
+        .animate-progress-bar { animation: progressBar 5s linear forwards; }
+
+        html, body, #root { height: 100%; margin: 0; overflow: hidden; font-size: 14px; }
+      `}</style>
+    </div>
+  );
 };
+
+const PlayIcon = ({ className }: { className?: string }) => (
+  <svg className={className} width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+);
+
+const ChevronDownIcon = ({ className }: { className?: string }) => (
+  <svg className={className} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+);
 
 export default TenderComparison;

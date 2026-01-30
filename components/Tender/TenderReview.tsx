@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { 
   Upload, FileText, CheckCircle2, SearchIcon, Trash2, Play, 
@@ -317,7 +318,7 @@ const TenderReview: React.FC<TenderReviewProps> = ({ defaultTab = 0 }) => {
               <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
                 <Files className="w-4 h-4 text-blue-600" /> 投标文件批量导入
               </h3>
-              <span className="text-[10px] text-slate-400 uppercase tracking-widest font-black">MAX 10 FILES | ≤ 50MB</span>
+              <span className="text-[10px] text-slate-400 uppercase tracking-widest font-black">最多支持 10 份文件 | 单文件 ≤ 50MB</span>
             </div>
             <div className="flex-1 flex gap-4 min-h-0">
               <input type="file" multiple onChange={handleMultiUpload} className="hidden" id="multi-upload" />

@@ -28,7 +28,7 @@ const RightAside: React.FC = () => {
             <section>
               <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center justify-between">
                 快捷操作
-                <span className="text-[10px] bg-slate-100 px-1.5 rounded">Config</span>
+                <span className="text-[10px] bg-slate-100 px-1.5 rounded">配置</span>
               </h4>
               <div className="grid grid-cols-2 gap-2">
                 {['发起审批', '新建合同', '添加风险', '合规报备'].map((item) => (

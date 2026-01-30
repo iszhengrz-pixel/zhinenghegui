@@ -3,8 +3,12 @@ import Header from './components/Layout/Header';
 import Sidebar from './components/Layout/Sidebar';
 import HomeDashboard from './components/Dashboard/HomeDashboard';
 import PartnerManagement from './components/Partners/PartnerManagement';
-import TenderFlawDetection from './components/Tender/TenderFlawDetection';
+import TenderReview from './components/Tender/TenderReview';
 import TenderComparison from './components/Tender/TenderComparison';
+import TenderFlawDetection from './components/Tender/TenderFlawDetection';
+import TenderAuditPerson from './components/Tender/TenderAuditPerson';
+import TenderAuditCheck from './components/Tender/TenderAuditCheck';
+import KnowledgeBase from './components/KnowledgeBase/KnowledgeBase';
 import { MENU_DATA } from './constants';
 
 const App: React.FC = () => {
@@ -28,7 +32,7 @@ const App: React.FC = () => {
     });
 
     return (
-      <nav className="flex mb-4 text-xs font-medium text-slate-400 gap-2 items-center">
+      <nav className="flex mb-4 text-xs font-medium text-slate-400 gap-2 items-center px-4 pt-4">
         <span className="hover:text-[#1E40AF] cursor-pointer transition-colors" onClick={() => setActiveMenuId('viz-overview')}>管理后台</span>
         {parentLabel && <span>/</span>}
         {parentLabel && <span className="capitalize">{parentLabel}</span>}
@@ -39,19 +43,18 @@ const App: React.FC = () => {
   };
 
   const renderContent = () => {
+    const isFullWidthModule = ['kb-laws', 'kb-rules', 'kb-cases', 'tender-audit-person', 'tender-audit-check'].includes(activeMenuId);
+
     switch (activeMenuId) {
       case 'viz-overview':
         return (
-          <div className="p-6 overflow-y-auto h-full custom-scrollbar">
-            <div className="max-w-7xl mx-auto">
-              {getBreadcrumb()}
-              <HomeDashboard />
-            </div>
+          <div className="overflow-y-auto h-full custom-scrollbar bg-white">
+            <HomeDashboard />
           </div>
         );
       case 'partners-mgmt':
         return (
-          <div className="p-6 overflow-y-auto h-full custom-scrollbar">
+          <div className="p-6 overflow-y-auto h-full custom-scrollbar bg-gray-50/30">
             <div className="max-w-7xl mx-auto">
               {getBreadcrumb()}
               <PartnerManagement />
@@ -62,9 +65,24 @@ const App: React.FC = () => {
         return <TenderFlawDetection />;
       case 'tender-compare':
         return <TenderComparison />;
+      case 'tender-audit-person':
+        return <TenderAuditPerson />;
+      case 'tender-audit-check':
+        return <TenderAuditCheck />;
+      case 'kb-laws':
+      case 'kb-rules':
+      case 'kb-cases':
+        return (
+          <div className="p-6 overflow-y-auto h-full custom-scrollbar bg-gray-50/30">
+            <div className={`mx-auto ${isFullWidthModule ? 'w-full' : 'max-w-7xl'}`}>
+              {getBreadcrumb()}
+              <KnowledgeBase activeId={activeMenuId} />
+            </div>
+          </div>
+        );
       default:
         return (
-          <div className="p-6 overflow-y-auto h-full custom-scrollbar">
+          <div className="p-6 overflow-y-auto h-full custom-scrollbar bg-gray-50/30">
             <div className="max-w-7xl mx-auto">
               {getBreadcrumb()}
               <div className="bg-white rounded-2xl border border-gray-100 p-12 flex flex-col items-center justify-center text-center shadow-sm min-h-[400px]">
@@ -91,7 +109,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-gray-50">
+    <div className="flex flex-col h-screen overflow-hidden bg-white">
       <Header 
         isSidebarCollapsed={isSidebarCollapsed} 
         onMenuToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)} 
@@ -107,7 +125,7 @@ const App: React.FC = () => {
             {renderContent()}
           </div>
           <footer className="h-10 bg-white border-t border-gray-100 px-6 flex items-center justify-between text-[11px] text-slate-400 shrink-0">
-            <div>© 2024 智能合规风控系统 (Intelligent Compliance and Risk Control System) 版权所有</div>
+            <div>© 2024 宁波城投智能合规风控系统 版权所有</div>
             <div className="flex gap-4">
                <span className="flex items-center gap-1">
                  <span className="w-1.5 h-1.5 bg-[#10B981] rounded-full"></span> 

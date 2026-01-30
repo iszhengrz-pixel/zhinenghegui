@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Bell, Search, LogOut, Menu, ChevronDown, User, Settings, Shield } from 'lucide-react';
 
@@ -27,7 +28,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle, isSidebarCollapsed }) => 
         <button 
           onClick={onMenuToggle}
           className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-600"
-          aria-label="Toggle Menu"
+          aria-label="切换菜单"
         >
           <Menu className="w-5 h-5" />
         </button>
@@ -45,7 +46,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle, isSidebarCollapsed }) => 
           {/* 垂直分割线 */}
           <div className="h-6 w-px bg-slate-200 mx-4 hidden sm:block"></div>
           <h1 className="text-lg font-bold text-slate-800 hidden sm:block tracking-tight">
-            智能合规风控系统
+            AI智能合规风控系统
           </h1>
         </div>
       </div>
@@ -81,7 +82,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle, isSidebarCollapsed }) => 
             <div className="relative">
               <img 
                 src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" 
-                alt="Avatar" 
+                alt="个人头像" 
                 className="w-9 h-9 rounded-full border border-slate-200 object-cover shadow-sm bg-white"
               />
               <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-400 border-2 border-white rounded-full"></div>

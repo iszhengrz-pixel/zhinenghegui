@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useMemo } from 'react';
 import { Upload, FileText, CheckCircle2, SearchIcon, Trash2, Play, FileWarning, HelpCircle, BarChart3, Network, Files, X, AlertCircle } from 'lucide-react';
 
@@ -92,7 +93,8 @@ const TenderReview: React.FC = () => {
   };
 
   const handleMultiUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
+    // Explicitly cast to File[] to ensure properties like 'size' are accessible on elements.
+    const files = Array.from(e.target.files || []) as File[];
     if (comparisonFiles.length + files.length > 10) {
       alert("最多支持上传 10 份文件");
       return;
